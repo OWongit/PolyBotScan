@@ -1,0 +1,13 @@
+{
+    "offset": 34,
+    "scanner_on": true,
+    "min_volume": 2000000,
+    "min_growth_rate_diff": 125,
+    "min_pnl_diff": 25000,
+    "min_bot_count_diff": 15,
+    "min_share_price": 0.05,
+    "max_share_price": 0.75,
+    "Server_Token": "SERVER_TOKEN_HERE",
+    "scanner_unfiltered": "CHANEL_ID_HERE_AS_INT",
+    "flagged_buys": "CHANEL_ID_HERE_AS_INT"
+}
