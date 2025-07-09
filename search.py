@@ -1,4 +1,3 @@
-import asyncio
 import aiohttp
 
 # Base API endpoints
@@ -46,7 +45,22 @@ async def get_position(user, condition_id):
     return 0, 0
 
 async def get_market_data(condition_id):
-    """Aggregate growth rates, PNLs, position sizes, account sizes, and bot flags per holder group."""
+    """
+    Asynchronously retrieves and computes market data metrics for user groups associated with a given condition.
+    Args:
+        condition_id (str or int): The identifier for the market condition to query user groups.
+    Returns:
+        dict: A dictionary with the following keys, each mapping to a list of lists (one per group):
+            - "growth_rates": List of lists containing the daily growth rates for each user in each group.
+            - "PNLs": List of lists containing the profit and loss values for each user in each group.
+            - "pos_size": List of lists containing the current position size for each user in each group.
+            - "account_size": List of lists containing the account size for each user in each group.
+            - "is_bot": List of lists containing boolean values indicating if each user in each group is likely a bot.
+    Notes:
+        - Users with insufficient PnL history (less than 2 entries) are skipped.
+        - The function aggregates metrics per group, as returned by `get_holders(condition_id)`.
+        - Bot activity is determined by checking if a user has 500 trades within a 50-day span.
+    """
     keys = ["growth_rates", "PNLs", "pos_size", "account_size", "is_bot"]
     data = {k: [] for k in keys}
 
@@ -94,7 +108,22 @@ async def get_market_data(condition_id):
 
     return data
 
-async def flag_market(results, settings):           #currentlt setting things to float, may change later in main.py, send over float value rather than string
+async def flag_market(results, settings):           #currently setting things to float, may change later in main.py, send over float value rather than string
+    """
+    Analyzes market results and flags a market as 'YES', 'NO', or None based on price and growth rate criteria. Currently only considers share price and scaled growth averages.
+
+    Args:
+        results (dict): A dictionary containing market data, including 'prices' (list of floats or strings)
+            and 'Scaled Growth Avg' (dict with 'yes' and 'no' keys).
+        settings (dict): A dictionary containing threshold settings:
+            - 'min_share_price' (float): Minimum allowed share price.
+            - 'max_share_price' (float): Maximum allowed share price.
+            - 'min_growth_rate_diff' (float): Minimum required difference in scaled growth averages.
+
+    Returns:
+        str or None: Returns 'YES' if the 'yes' market meets the criteria, 'NO' if the 'no' market meets the criteria,
+            or None if neither condition is satisfied.
+    """
     # Check for yes:
     if float(results['prices'][0]) > settings['min_share_price'] and float(results['prices'][0]) < settings['max_share_price']:
         if float(results['Scaled Growth Avg']['yes']) - float(results['Scaled Growth Avg']['no']) > settings['min_growth_rate_diff']:
@@ -105,15 +134,17 @@ async def flag_market(results, settings):           #currentlt setting things to
             return 'NO'
     return None
 
-
-#helpers
+# Helper functions:
+# This function computes the scaled average of values weighted by their sizes.
 async def scaled_avg(vals, sizes):
-    # sum(val*size) / (sum(sizes) * count)
+    # avg sum(val*size) / (sum(sizes) * count)
     if (sum(sizes) * len(vals)) == 0:
         return 0
     return sum(v*s for v, s in zip(vals, sizes)) / (sum(sizes) * len(vals))
 
+# This function computes the average proportion of sizes to accounts.
 async def avg_prop(sizes, accounts):
+    # avg sum(sizes / accounts) / len(sizes)
     if sum(accounts) == 0:
         return 0
     return sum(s/a for s, a in zip(sizes, accounts) if a != 0) / len(sizes)

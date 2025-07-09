@@ -1,13 +1,13 @@
 import json
-import asyncio
 
-def read(key=None, file_path='sets.json'):
+# This function reads a JSON file and returns the entire content or a specific key's value.
+def read(key=None, file_path='config.json'):
     with open(file_path, 'r', encoding='utf-8') as f:
         data = json.load(f)
         return data.get(key) if key else data
 
-
-def update(key, value, file_path='sets.json'):
+# This function updates a specific key in the JSON file with a new value.
+def update(key, value, file_path='config.json'):
     with open(file_path, 'r', encoding='utf-8') as f:
         data = json.load(f)
     if key:
@@ -16,7 +16,8 @@ def update(key, value, file_path='sets.json'):
             json.dump(data, f, indent=4)
     return data
 
-def iterate(key, iteration, file_path='sets.json'):
+# This function iterates a numeric value in the JSON file by a specified iteration amount.
+def iterate(key, iteration, file_path='config.json'):
     with open(file_path, 'r', encoding='utf-8') as f:
         data = json.load(f)
     if type(data[key]) == int:

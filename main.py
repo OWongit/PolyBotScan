@@ -14,8 +14,7 @@ bot = commands.Bot(command_prefix='-', intents=intents)
 scanner_unfiltered = None
 flagged_buys = None
 
-
-# ——— Event handlers ———
+# ——— Start Up Event ———
 @bot.event
 async def on_ready():
     global scanner_unfiltered
@@ -26,13 +25,6 @@ async def on_ready():
     flagged_buys = bot.get_channel(json_functions.read('flagged_buys'))
 
     print("Bot is ready!")
-
-# ——— Commands ———
-@bot.command()
-async def hello(ctx):
-    """A simple test command."""
-    await ctx.send("testing hello command")
-    print("testing hello")
 
 # ——— Set Offset Command ———
 @bot.command()
@@ -139,12 +131,7 @@ async def scan(ctx):
 @bot.command()
 async def stop_scan(ctx):
     """Stop the market scanning."""
-    # Check if the scanner channel is ready
-    with open('sets.json', 'r', encoding='utf-8') as f:        
-        settings = json.load(f)
-        settings['scanner_on'] = False
-    with open('sets.json', 'w', encoding='utf-8') as f:
-        json.dump(settings, f, indent=4)
+    json_functions.update('scanner_on', False)
     await scanner_unfiltered.send("Stopping scan after current market scan…")
 
 # ——— Run Bot ———
