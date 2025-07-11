@@ -1,3 +1,4 @@
+from modulefinder import test
 import discord
 import json
 from discord.ext import commands
@@ -11,32 +12,71 @@ intents = discord.Intents.all()
 bot = commands.Bot(command_prefix='-', intents=intents)
 
 # This will hold our channel reference after on_ready fires
-scanner_unfiltered = None
-flagged_buys = None
+SCANNER_ALL = None
+SCANNER_FLAGGED = None
+SETTINGS = None
 
 # ——— Start Up Event ———
 @bot.event
 async def on_ready():
-    global scanner_unfiltered
-    global flagged_buys
+    global SCANNER_ALL
+    global SCANNER_FLAGGED
+    global SETTINGS
 
     # Try cache the channel so get_channel() won't return None later
-    scanner_unfiltered = bot.get_channel(json_functs.read('scanner_unfiltered'))
-    flagged_buys = bot.get_channel(json_functs.read('flagged_buys'))
+    SCANNER_ALL = bot.get_channel(json_functs.read('scanner_unfiltered'))
+    SCANNER_FLAGGED = bot.get_channel(json_functs.read('flagged_buys'))
+    SETTINGS = bot.get_channel(json_functs.read('settings'))
 
     print("Bot is ready!")
 
-# ——— Set Offset Command ———
+@bot.command()
+async def set(ctx, key = None, value = None):
+    """
+    Sets a configuration setting to a specified value.
+
+    If no key or value is provided, sends a message listing all available settings and their current values,
+    along with usage instructions.
+
+    Args:
+        ctx: The context in which the command was invoked.
+        key (str, optional): The name of the setting to update.
+        value (any, optional): The new value to assign to the setting.
+
+    Returns:
+        None
+
+    Side Effects:
+        - Sends a message to the SETTINGS channel with either usage instructions or the result of the setting update.
+    """
+    settings = json_functs.read()
+    if key is None or value is None:
+        await SETTINGS.send(
+            "```Please provide a setting and value to set. Usage: -set <key> <value>\n\n"
+            "Available settings: \n"
+            f"offset:                 {settings.get('offset')}{((13 - len(str(settings.get('offset')))) * ' ')}<greater than 0, integer> \n"
+            f"min_volume:             {settings.get('min_volume')}{((13 - len(str(settings.get('min_volume')))) * ' ')}<greater than 0, integer> \n"
+            f"min_growth_rate_diff:   {settings.get('min_growth_rate_diff')}{((13 - len(str(settings.get('min_growth_rate_diff')))) * ' ')}<greater than 0, integer> \n"
+            f"min_pnl_diff:           {settings.get('min_pnl_diff')}{((13 - len(str(settings.get('min_pnl_diff')))) * ' ')}<greater than 0, integer> \n"
+            f"min_bot_count_diff:     {settings.get('min_bot_count_diff')}{((13 - len(str(settings.get('min_bot_count_diff')))) * ' ')}<between 0 and 20, integer> \n"
+            f"min_share_price:        {settings.get('min_share_price')}{((13 - len(str(settings.get('min_share_price')))) * ' ')}<between 0.0 and 1.0, float> \n"
+            f"max_share_price:        {settings.get('max_share_price')}{((13 - len(str(settings.get('max_share_price')))) * ' ')}<between 0.0 and 1.0, float>```"
+        )
+    else:
+        msg = await json_functs.set_setting(key, value)
+        await SETTINGS.send(msg)
+
+# ——— Scan Command ———
 @bot.command()
 async def scan(ctx):
     """Continuously scan markets and post results."""
-    if scanner_unfiltered is None:
+    if SCANNER_ALL is None:
         await ctx.send("Scanner channel not ready yet. Please try again in a few seconds.")
         return
 
     scanner_on  = json_functs.update('scanner_on', True)['scanner_on']
 
-    await scanner_unfiltered.send("Scanning Markets…")
+    await SCANNER_ALL.send("Scanning Markets…")
     try:
         while scanner_on:
             # Load the settings from the JSON file
@@ -44,7 +84,7 @@ async def scan(ctx):
 
             # get market data and flagged markets
             market = await search.get_market(settings['min_volume'], settings['offset'])
-            flagged = set(json_functs.append_flagged_markets(None)['markets'])
+            flagged = json_functs.read('markets', file_path='storage/flagged_markets.json')
 
             # Check if the market is None or if its conditionId is in flagged markets (means every market has been scanned)
             if (market is None):
@@ -130,17 +170,17 @@ async def scan(ctx):
             flag_market = await search.flag_market(results, settings)
             if flag_market:
                 json_functs.append_flagged_markets(condition_id)
-                await flagged_buys.send(f"** Buy {flag_market}**\n" + "----------------\n" + msg)
+                await SCANNER_FLAGGED.send(f"** Buy {flag_market}**\n" + "----------------\n" + msg)
                 sheets_data.insert(0, flag_market)
             else:
                 sheets_data.insert(0, "NO FLAG")
 
             # send to unfiltered channel and google sheets regardless of flag
-            await scanner_unfiltered.send(msg)
-            await helper_functs.insert_row_at_top(sheets_data)
+            await SCANNER_ALL.send(msg)
 
-             # Append the conditionId to the in_sheets json
-            json_functs.append_flagged_markets(condition_id, file_path='storage/in_sheets.json')
+            if condition_id not in json_functs.read('markets', file_path='storage/in_sheets.json'):
+                await helper_functs.insert_row_at_top(sheets_data)
+                json_functs.append_flagged_markets(condition_id, file_path='storage/in_sheets.json')
 
             # Update the offset for the next market and check if scanning should continue
             settings = json_functs.iterate('offset', 1)
@@ -148,7 +188,7 @@ async def scan(ctx):
 
             # avoid spamming and rate‐limits
             await asyncio.sleep(5)
-        await scanner_unfiltered.send("Market scanning stopped.")
+        await SCANNER_ALL.send("Market scanning stopped.")
 
     except asyncio.CancelledError:
         await scanner_unfiltered.send("Market scan stopped.")

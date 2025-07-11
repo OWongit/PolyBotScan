@@ -28,3 +28,4 @@ async def avg_prop(sizes, accounts):
     if sum(accounts) == 0:
         return 0
     return sum(s/a for s, a in zip(sizes, accounts) if a != 0) / len(sizes)
+
