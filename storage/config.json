@@ -1,8 +1,8 @@
 {
-    "offset": 34,
-    "scanner_on": true,
+    "offset": 0,
+    "scanner_on": false,
     "min_volume": 2000000,
-    "min_growth_rate_diff": 125,
+    "min_growth_rate_diff": 100,
     "min_pnl_diff": 25000,
     "min_bot_count_diff": 15,
     "min_share_price": 0.05,
