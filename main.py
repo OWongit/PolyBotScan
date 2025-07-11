@@ -2,7 +2,7 @@ import discord
 import json
 from discord.ext import commands
 import asyncio
-import search, json_functions   # external modules
+import search, json_functs, helper_functs   # external modules
 
 
 
@@ -21,8 +21,8 @@ async def on_ready():
     global flagged_buys
 
     # Try cache the channel so get_channel() won't return None later
-    scanner_unfiltered = bot.get_channel(json_functions.read('scanner_unfiltered'))
-    flagged_buys = bot.get_channel(json_functions.read('flagged_buys'))
+    scanner_unfiltered = bot.get_channel(json_functs.read('scanner_unfiltered'))
+    flagged_buys = bot.get_channel(json_functs.read('flagged_buys'))
 
     print("Bot is ready!")
 
@@ -34,27 +34,27 @@ async def scan(ctx):
         await ctx.send("Scanner channel not ready yet. Please try again in a few seconds.")
         return
 
-    scanner_on  = json_functions.update('scanner_on', True)['scanner_on']
+    scanner_on  = json_functs.update('scanner_on', True)['scanner_on']
 
     await scanner_unfiltered.send("Scanning Markets…")
     try:
         while scanner_on:
             # Load the settings from the JSON file
-            settings  = json_functions.read()
+            settings  = json_functs.read()
 
             # get market data and flagged markets
             market = await search.get_market(settings['min_volume'], settings['offset'])
-            flagged = set(json_functions.append_flagged_markets(None)['flagged_markets'])
+            flagged = set(json_functs.append_flagged_markets(None)['markets'])
 
             # Check if the market is None or if its conditionId is in flagged markets (means every market has been scanned)
             if (market is None):
-                settings = json_functions.iterate('offset', -settings['offset'])
+                settings = json_functs.iterate('offset', -settings['offset'])
                 offset, scanner_on = settings['offset'], settings['scanner_on']
                 continue
 
             # If the market's conditionId is in flagged markets, skip it
             if market.get('conditionId') in flagged:
-                settings = json_functions.iterate('offset', 1)
+                settings = json_functs.iterate('offset', 1)
                 offset, scanner_on = settings['offset'], settings['scanner_on']
                 continue
 
@@ -71,16 +71,16 @@ async def scan(ctx):
             # compute results
             results = {
                 "Scaled Growth Avg": {  
-                    "yes": round(await search.scaled_avg(gr_y, ps_y)),
-                    "no":  round(await search.scaled_avg(gr_n, ps_n)),
+                    "yes": round(await helper_functs.scaled_avg(gr_y, ps_y)),
+                    "no":  round(await helper_functs.scaled_avg(gr_n, ps_n)),
                 },
                 "Scaled PNL Avg": {
-                    "yes": round(await search.scaled_avg(pnl_y, ps_y)),
-                    "no":  round(await search.scaled_avg(pnl_n, ps_n)),
+                    "yes": round(await helper_functs.scaled_avg(pnl_y, ps_y)),
+                    "no":  round(await helper_functs.scaled_avg(pnl_n, ps_n)),
                 },
                 "Avg Prop of Account": {
-                    "yes": round(await search.avg_prop(ps_y, acc_y), 3),
-                    "no":  round(await search.avg_prop(ps_n, acc_n), 3),
+                    "yes": round(await helper_functs.avg_prop(ps_y, acc_y), 3),
+                    "no":  round(await helper_functs.avg_prop(ps_n, acc_n), 3),
                 },
                 "Number of Bots": {
                     "yes": round(sum(bot_y)),
@@ -89,8 +89,30 @@ async def scan(ctx):
                 "volume": round(float(str(market['volume']).replace(',', ''))),
                 "prices": json.loads(market['outcomePrices']),
                 "question": question,
-                "ticker": market['events'][0]['ticker']
+                "ticker": market['events'][0]['ticker'],
+                "resolves" : market['endDate']
             }
+
+            # Prepare data for Google sheets:
+            sheets_data = [
+                results['question'],
+                f"https://polymarket.com/event/{results['ticker']}",
+                results['volume'],
+                results['resolves'][0:10],
+                results['prices'][0],
+                results['prices'][1],
+                results['Scaled Growth Avg']['yes'],
+                results['Scaled Growth Avg']['no'],
+                abs(results['Scaled Growth Avg']['yes'] - results['Scaled Growth Avg']['no']),
+                results['Scaled PNL Avg']['yes'],
+                results['Scaled PNL Avg']['no'],
+                abs(results['Scaled PNL Avg']['yes'] - results['Scaled PNL Avg']['no']),
+                results['Avg Prop of Account']['yes'],
+                results['Avg Prop of Account']['no'],
+                abs(results['Avg Prop of Account']['yes'] - results['Avg Prop of Account']['no']),
+                results['Number of Bots']['yes'],
+                results['Number of Bots']['no']
+            ]
 
             # build message
             msg = (
@@ -107,14 +129,21 @@ async def scan(ctx):
             # Send the message to the flagged-buys channel if the market meets the criteria
             flag_market = await search.flag_market(results, settings)
             if flag_market:
-                json_functions.append_flagged_markets(condition_id)
+                json_functs.append_flagged_markets(condition_id)
                 await flagged_buys.send(f"** Buy {flag_market}**\n" + "----------------\n" + msg)
-            
-            # send to unfiltered channel regardless of flag
+                sheets_data.insert(0, flag_market)
+            else:
+                sheets_data.insert(0, "NO FLAG")
+
+            # send to unfiltered channel and google sheets regardless of flag
             await scanner_unfiltered.send(msg)
+            await helper_functs.insert_row_at_top(sheets_data)
+
+             # Append the conditionId to the in_sheets json
+            json_functs.append_flagged_markets(condition_id, file_path='storage/in_sheets.json')
 
             # Update the offset for the next market and check if scanning should continue
-            settings = json_functions.iterate('offset', 1)
+            settings = json_functs.iterate('offset', 1)
             offset, scanner_on = settings['offset'], settings['scanner_on']
 
             # avoid spamming and rate‐limits
@@ -131,10 +160,10 @@ async def scan(ctx):
 @bot.command()
 async def stop_scan(ctx):
     """Stop the market scanning."""
-    json_functions.update('scanner_on', False)
+    json_functs.update('scanner_on', False)
     await scanner_unfiltered.send("Stopping scan after current market scan…")
 
 # ——— Run Bot ———
 if __name__ == '__main__':
-    token = json_functions.read('Server_Token')
+    token = json_functs.read('Server_Token')
     bot.run(token)

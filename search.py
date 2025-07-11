@@ -1,4 +1,5 @@
 import aiohttp
+import asyncio
 
 # Base API endpoints
 BASE_GAMMA = "https://gamma-api.polymarket.com"
@@ -6,12 +7,20 @@ BASE_DATA  = "https://data-api.polymarket.com"
 BASE_PNL   = "https://user-pnl-api.polymarket.com"
 
 
-async def _get(url, **params):
-    """Helper to send GET requests asynchronously and return parsed JSON."""
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url, params={k: str(v) for k, v in params.items()}) as resp:
-            resp.raise_for_status()
-            return await resp.json()
+async def _get(url, retries=5, **params):
+    """Helper to send GET requests asynchronously and return parsed JSON. Retries on failure."""
+    for attempt in range(retries):
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, params={k: str(v) for k, v in params.items()}) as resp:
+                    resp.raise_for_status()
+                    return await resp.json()
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            if attempt < retries - 1:
+                await asyncio.sleep(100)  # Wait before retrying
+            else:
+                print(f"API request failed after {retries} attempts: {e}")
+                return None  # Or handle as appropriate for your app
 
 async def get_market(min_volume, offset):
     """Fetch an active, open market with at least `min_volume`, skipping `offset` entries."""
@@ -134,18 +143,3 @@ async def flag_market(results, settings):           #currently setting things to
             return 'NO'
     return None
 
-# Helper functions:
-# This function computes the scaled average of values weighted by their sizes.
-async def scaled_avg(vals, sizes):
-    # avg sum(val*size) / (sum(sizes) * count)
-    if (sum(sizes) * len(vals)) == 0:
-        return 0
-    return sum(v*s for v, s in zip(vals, sizes)) / (sum(sizes) * len(vals))
-
-# This function computes the average proportion of sizes to accounts.
-async def avg_prop(sizes, accounts):
-    # avg sum(sizes / accounts) / len(sizes)
-    if sum(accounts) == 0:
-        return 0
-    return sum(s/a for s, a in zip(sizes, accounts) if a != 0) / len(sizes)
-    
