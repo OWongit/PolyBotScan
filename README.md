@@ -30,7 +30,7 @@ PolyBotScan is a tool designed to analyze the 40 largest holders of a specified 
 ## Configuration
 
 - Edit `config.json` to set your token contract address, Discord webhook URL, and other parameters.
-
+- Edit json_functs.py and helper_functs.py to contain the correct .json file paths. (replace my...json file path).
 ## Usage
 
 Run the main script:
