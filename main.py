@@ -195,7 +195,7 @@ async def scan(ctx):
     except asyncio.CancelledError:
         await scanner_unfiltered.send("Market scan stopped.")
     except Exception as e:
-        await scanner_unfiltered.send(f"Error during scan: {e}")
+        await SCANNER_ALL.send(f"Error during scan: {e}")
         raise
 
 # ——— Stop Scan Command ———
@@ -203,7 +203,7 @@ async def scan(ctx):
 async def stop_scan(ctx):
     """Stop the market scanning."""
     json_functs.update('scanner_on', False)
-    await scanner_unfiltered.send("Stopping scan after current market scan…")
+    await SCANNER_ALL.send("Stopping scan after current market scan…")
 
 # ——— Run Bot ———
 if __name__ == '__main__':
