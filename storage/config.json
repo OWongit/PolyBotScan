@@ -9,5 +9,6 @@
     "max_share_price": 0.75,
     "Server_Token": "SERVER_TOKEN_HERE",
     "scanner_unfiltered": "CHANEL_ID_HERE_AS_INT",
-    "flagged_buys": "CHANEL_ID_HERE_AS_INT"
+    "flagged_buys": "CHANEL_ID_HERE_AS_INT",
+    "settings": "CHANEL_ID_HERE_AS_INT"
 }

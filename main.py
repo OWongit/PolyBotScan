@@ -171,7 +171,7 @@ async def scan(ctx):
             if flag_market:
                 json_functs.append_flagged_markets(condition_id)
                 await SCANNER_FLAGGED.send(f"** Buy {flag_market}**\n" + "----------------\n" + msg)
-                sheets_data.insert(0, flag_market)
+                sheets_data.insert(0, f"BUY {flag_market}")
             else:
                 sheets_data.insert(0, "NO FLAG")
 
@@ -181,7 +181,9 @@ async def scan(ctx):
             if condition_id not in json_functs.read('markets', file_path='storage/in_sheets.json'):
                 await helper_functs.insert_row_at_top(sheets_data)
                 json_functs.append_flagged_markets(condition_id, file_path='storage/in_sheets.json')
-
+            elif flag_market:
+                await helper_functs.insert_row_at_top(sheets_data)
+            
             # Update the offset for the next market and check if scanning should continue
             settings = json_functs.iterate('offset', 1)
             offset, scanner_on = settings['offset'], settings['scanner_on']
