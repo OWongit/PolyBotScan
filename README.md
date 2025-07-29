@@ -2,7 +2,7 @@
   
 ## Overview
 
-PolyBotScan is a tool designed to analyze the 40 largest holders of a specified PolyMarket question. It collects wallet data, performs analytics, and posts summarized results to a Discord channel and Google sheet for real-time visibility.
+PolyBotScan is a tool designed to analyze the 40 largest holders of a specified PolyMarket question. It collects wallet data, performs analytics, and posts summarized results to a Discord channel and a Google sheet for real-time visibility.
 
 ## Features
 
@@ -10,6 +10,7 @@ PolyBotScan is a tool designed to analyze the 40 largest holders of a specified 
 - Aggregates wallet data, including balances and transaction history.
 - Generates summary statistics and insights.
 - Automatically posts formatted reports to a Discord server and google sheet upon configuration.
+- Daily Summary of User Position Metrics and Performance Statistics.
 - Allows live configuration of bot settings using the -set <key> <value> command while the bot is running.
 
 ## Displays
@@ -32,7 +33,7 @@ PolyBotScan is a tool designed to analyze the 40 largest holders of a specified 
 
 ## Configuration
 
-- Edit `config.json` to set your token contract address, Discord webhook URL, and other parameters.
+- Edit `config.json` to set your proxywallet ID, token contract address, Discord webhook URL, and other parameters.
 - Edit json_functs.py and helper_functs.py to contain the correct .json file paths. (replace my...json file path).
 ## Usage
 

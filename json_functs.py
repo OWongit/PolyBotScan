@@ -61,7 +61,7 @@ async def set_setting(key, value):
         str: A formatted message indicating the result of the operation, including validation errors or confirmation of the update.
     """
     old_setting = read(key)
-    valid_keys = ['offset', 'min_volume', 'min_growth_rate_diff', 'min_pnl_diff', 'min_bot_count_diff', 'min_share_price', 'max_share_price']
+    valid_keys = ['rundown_time', 'offset', 'min_volume', 'min_growth_rate_diff', 'min_pnl_diff', 'min_bot_count_diff', 'min_share_price', 'max_share_price']
     if key not in valid_keys:
         return "```Invalid setting. Valid settings are: \n" + ", ".join(valid_keys) + "```"
     else:
@@ -81,6 +81,9 @@ async def set_setting(key, value):
                     return f"```{key.replace('_', ' ').title()} must be greater than 0.```"
                 if key == 'min_bot_count_diff' and (value < 0 or value > 20):
                     return "```Minimum bot count difference must be between 0 and 20.```"
+                if key == 'rundown_time' and (value < 0 or value > 24):
+                    return "```Rundown time must be between 0 and 24 (military time)```"
+
                 update(key, value)
                 return f"```Setting '{key}' updated from {old_setting} to: {value}```"
             except ValueError:

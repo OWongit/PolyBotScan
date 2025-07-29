@@ -1,4 +1,7 @@
 {
+    "user": "PROXYWALLET_HERE_AS_STRING",
+    "rundown_time": 9,
+    "rundown_flag": false,
     "offset": 0,
     "scanner_on": false,
     "min_volume": 2000000,
@@ -10,5 +13,6 @@
     "Server_Token": "SERVER_TOKEN_HERE",
     "scanner_unfiltered": "CHANEL_ID_HERE_AS_INT",
     "flagged_buys": "CHANEL_ID_HERE_AS_INT",
-    "settings": "CHANEL_ID_HERE_AS_INT"
+    "settings": "CHANEL_ID_HERE_AS_INT",
+    "daily_rundown": "CHANEL_ID_HERE_AS_INT"
 }

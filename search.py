@@ -1,5 +1,7 @@
 import aiohttp
 import asyncio
+import helper_functs
+import json
 
 # Base API endpoints
 BASE_GAMMA = "https://gamma-api.polymarket.com"
@@ -22,20 +24,25 @@ async def _get(url, retries=5, **params):
                 print(f"API request failed after {retries} attempts: {e}")
                 return None  # Or handle as appropriate for your app
 
-async def get_market(min_volume, offset):
+async def get_market(min_volume, offset, condition_ids=None):
     """Fetch an active, open market with at least `min_volume`, skipping `offset` entries."""
-    markets = await _get(
-        f"{BASE_GAMMA}/markets",
-        limit=1,
-        offset=offset,
-        active="true",
-        closed="false",
-        volume_num_min=min_volume
-    )
-
-    if markets is None or len(markets) == 0:
-        return None
-    return markets[0]
+    if condition_ids:
+        market = await _get(f"{BASE_GAMMA}/markets", 
+                            condition_ids=condition_ids,
+                    )
+        return market if market else None
+    else:
+        markets = await _get(
+            f"{BASE_GAMMA}/markets",
+            limit=1,
+            offset=offset,
+            active="true",
+            closed="false",
+            volume_num_min=min_volume
+        )
+        if not markets or len(markets) == 0:
+            return None
+        return markets[0]
 
 async def get_holders(condition_id):
     """Return two lists of proxy wallets for the holders of a given market."""
@@ -49,7 +56,10 @@ async def get_position(user, condition_id):
         user=user,
         market=condition_id
     )
+
     if data:
+        if not condition_id:
+            return data
         return data[0]["currentValue"], data[0]["cashPnl"]
     return 0, 0
 
@@ -116,6 +126,76 @@ async def get_market_data(condition_id):
             data[k].append(group_metrics[k])
 
     return data
+
+async def organize_market_data(condition_id, market):
+    if not market or not isinstance(market, dict):
+        raise ValueError("Market data is invalid or None.")
+    
+    md = await get_market_data(condition_id)
+    (gr_y, gr_n), (pnl_y, pnl_n), (ps_y, ps_n), (acc_y, acc_n), (bot_y, bot_n) = (
+        md[k] for k in ('growth_rates','PNLs','pos_size','account_size','is_bot')
+    )
+
+
+    # compute results
+    results = {
+        "Scaled Growth Avg": {  
+            "yes": round(await helper_functs.scaled_avg(gr_y, ps_y)),
+            "no":  round(await helper_functs.scaled_avg(gr_n, ps_n)),
+        },
+        "Scaled PNL Avg": {
+            "yes": round(await helper_functs.scaled_avg(pnl_y, ps_y)),
+            "no":  round(await helper_functs.scaled_avg(pnl_n, ps_n)),
+        },
+        "Avg Prop of Account": {
+            "yes": round(await helper_functs.avg_prop(ps_y, acc_y), 3),
+            "no":  round(await helper_functs.avg_prop(ps_n, acc_n), 3),
+        },
+        "Number of Bots": {
+            "yes": sum(bot_y) if bot_y is not None else "N/A",
+            "no":  sum(bot_n) if bot_n is not None else "N/A",
+        },
+        "volume": round(float(str(market.get('volume', '0')).replace(',', ''))) if market.get('volume') else "N/A",
+        "prices": json.loads(market.get('outcomePrices', '[]')),
+        "question": market.get('question', "N/A"),
+        "ticker": market.get('events', [{}])[0].get('ticker', "N/A") if market.get('events') else "N/A",
+        "resolves": market.get('endDate', "N/A")
+    }
+
+
+    # Prepare data for Google sheets:
+    sheets_data = [
+        results['question'],
+        f"https://polymarket.com/event/{results['ticker']}",
+        results['volume'],
+        results['resolves'][0:10], 
+        results['prices'][0],
+        results['prices'][1],
+        results['Scaled Growth Avg']['yes'],
+        results['Scaled Growth Avg']['no'],
+        abs(results['Scaled Growth Avg']['yes'] - results['Scaled Growth Avg']['no']),
+        results['Scaled PNL Avg']['yes'],
+        results['Scaled PNL Avg']['no'],
+        abs(results['Scaled PNL Avg']['yes'] - results['Scaled PNL Avg']['no']),
+        results['Avg Prop of Account']['yes'],
+        results['Avg Prop of Account']['no'],
+        abs(results['Avg Prop of Account']['yes'] - results['Avg Prop of Account']['no']),
+        results['Number of Bots']['yes'],
+        results['Number of Bots']['no']
+    ]
+
+    # build message
+    msg = (
+        f"**{results['question']}**\n"
+        f"```Volume: ${round(results['volume'])}{((10 - len(str(results['volume']))) * ' ')}   YES:      NO:\n"
+        f"• Share Price:        ${results['prices'][0]}{((9 - len(str(results['prices'][0]))) * ' ')}${results['prices'][1]}\n"
+        f"• Scaled Growth:      {results['Scaled Growth Avg']['yes']}{((10 - len(str(results['Scaled Growth Avg']['yes']))) * ' ')}{results['Scaled Growth Avg']['no']}\n"
+        f"• Scaled PNL:         {results['Scaled PNL Avg']['yes']}{((10 - len(str(results['Scaled PNL Avg']['yes']))) * ' ')}{results['Scaled PNL Avg']['no']}\n"
+        f"• Prop of Account:    {results['Avg Prop of Account']['yes']}{((10 - len(str(results['Avg Prop of Account']['yes']))) * ' ')}{results['Avg Prop of Account']['no']}\n"
+        f"• Number of Bots:     {results['Number of Bots']['yes']}{((10 - len(str(results['Number of Bots']['yes']))) * ' ')}{results['Number of Bots']['no']}```"
+        f"<https://polymarket.com/event/{results['ticker']}>\n"
+    )
+    return sheets_data, msg, results
 
 async def flag_market(results, settings):           #currently setting things to float, may change later in main.py, send over float value rather than string
     """
