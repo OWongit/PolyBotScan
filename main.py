@@ -2,43 +2,62 @@ from asyncio import tasks
 import discord
 from discord.ext import commands, tasks
 import asyncio
-import search, json_functs, helper_functs   # external modules
+import search, json_functs, helper_functs  # external modules
 from datetime import datetime
 import pytz
 
 
-
 # ——— Bot setup ———
 intents = discord.Intents.all()
-bot = commands.Bot(command_prefix='-', intents=intents)
+bot = commands.Bot(command_prefix="-", intents=intents)
 
 # This will hold our channel reference after on_ready fires
 SCANNER_ALL = None
 SCANNER_FLAGGED = None
 SETTINGS = None
 DAILY_RUNDOWN = None
+
+# ——— Global Variables ———
 USER = None
+RUNDOWN_TIME = None
+RUNDOWN_FLAG = False
 
 # ——— Start Up Event ———
 @bot.event
 async def on_ready():
+    """
+    Callback function executed when the bot is ready.
+    Initializes global variables for various Discord channels and user settings by reading from a JSON configuration.
+    Caches channel objects to avoid None returns from `get_channel()`.
+    Sends a status message to the scanner channel indicating whether the scanner is enabled.
+    Starts the scanner and position rundown loops if they are not already running.
+    Globals:
+        SCANNER_ALL (discord.TextChannel): Channel for unfiltered scanner messages.
+        SCANNER_FLAGGED (discord.TextChannel): Channel for flagged buy messages.
+        SETTINGS (discord.TextChannel): Channel for bot settings.
+        DAILY_RUNDOWN (discord.TextChannel): Channel for daily rundown messages.
+        USER (str): Proxywallet user ID.
+        RUNDOWN_TIME (Any): Time for daily rundown.
+    """
     global SCANNER_ALL
     global SCANNER_FLAGGED
     global SETTINGS
     global DAILY_RUNDOWN
     global USER
+    global RUNDOWN_TIME
 
     # Try cache the channel so get_channel() won't return None later
-    SCANNER_ALL = bot.get_channel(json_functs.read('scanner_unfiltered'))
-    SCANNER_FLAGGED = bot.get_channel(json_functs.read('flagged_buys'))
-    SETTINGS = bot.get_channel(json_functs.read('settings'))
-    DAILY_RUNDOWN = bot.get_channel(json_functs.read('daily_rundown'))
+    SCANNER_ALL = bot.get_channel(json_functs.read("scanner_unfiltered"))
+    SCANNER_FLAGGED = bot.get_channel(json_functs.read("flagged_buys"))
+    SETTINGS = bot.get_channel(json_functs.read("settings"))
+    DAILY_RUNDOWN = bot.get_channel(json_functs.read("daily_rundown"))
 
     # get user's proxywallet ID
-    USER = json_functs.read('user')
+    USER = json_functs.read("user")
+    RUNDOWN_TIME = json_functs.read("rundown_time")
 
     print("Bot is ready!")
-    if json_functs.read('scanner_on'):
+    if json_functs.read("scanner_on"):
         await SCANNER_ALL.send("**Starting Scanner...**")
         if not scan_loop.is_running():
             scan_loop.start()
@@ -47,9 +66,9 @@ async def on_ready():
     if not position_rundown.is_running():
         position_rundown.start()
 
-
+# ——— Change Settings Command ———
 @bot.command()
-async def set(ctx, key = None, value = None):
+async def set(key=None, value=None):
     """
     Sets a configuration setting to a specified value.
 
@@ -85,9 +104,10 @@ async def set(ctx, key = None, value = None):
         msg = await json_functs.set_setting(key, value)
         await SETTINGS.send(msg)
 
+
 # ——— Scan Command ———
 @bot.command()
-async def scan(ctx):
+async def scan():
     """
     Starts the market scanning process, continuously checking markets and posting results.
     If the scanner is already running, it will notify the user.
@@ -96,64 +116,66 @@ async def scan(ctx):
         await SCANNER_ALL.send("**Scanner channel not ready yet. Please try again in a few seconds.**")
         return
 
-    scanner_on = json_functs.read('scanner_on')
+    scanner_on = json_functs.read("scanner_on")
     if scanner_on:
         if not scan_loop.is_running():
             scan_loop.start()
         await SCANNER_ALL.send("**Scanner is already configured to be running.**")
     else:
-        json_functs.update('scanner_on', True)
+        json_functs.update("scanner_on", True)
         await SCANNER_ALL.send("**Starting Scan…**")
         if not scan_loop.is_running():
             scan_loop.start()
 
+
 # ——— Stop Scan Command ———
 @bot.command()
-async def stop_scan(ctx):
+async def stop_scan():
     """Stop the market scanning."""
     if SCANNER_ALL is None:
         await SCANNER_ALL.send("**Scanner channel not ready yet. Please try again in a few seconds.**")
         return
 
-    scanner_on = json_functs.read('scanner_on')
+    scanner_on = json_functs.read("scanner_on")
     if not scanner_on:
         await SCANNER_ALL.send("**Scanner is configured to not be running.**")
         if scan_loop.is_running():
             scan_loop.stop()
         return
 
-    json_functs.update('scanner_on', False)
+    json_functs.update("scanner_on", False)
     await SCANNER_ALL.send("**Stopping scan after current market scan…**")
     if scan_loop.is_running():
         scan_loop.stop()
 
+
 # ——— Market Scan Logic ———
 @tasks.loop()
-async def scan_loop(seconds = 3):
+async def scan_loop():
     """Continuously scan markets and post results."""
 
     try:
         # Load the settings from the JSON file
-        settings  = json_functs.read()
+        settings = json_functs.read()
 
         # get market data and flagged markets
-        market = await search.get_market(settings['min_volume'], settings['offset'])
-        flagged = json_functs.read('markets', file_path='storage/flagged_markets.json')
+        market = await search.get_market(settings["min_volume"], settings["offset"])
+        flagged = json_functs.read("markets", file_path="storage/flagged_markets.json")
 
         # Check if the market is None or if its conditionId is in flagged markets (means every market has been scanned)
-        if (market is None):
-            settings = json_functs.iterate('offset', -settings['offset'])
-            offset, scanner_on = settings['offset'], settings['scanner_on']
+        if market is None:
+            settings = json_functs.iterate("offset", -settings["offset"])
+            offset, scanner_on = settings["offset"], settings["scanner_on"]
             return
 
         # If the market's conditionId is in flagged markets, skip it
-        if market.get('conditionId') in flagged:
-            settings = json_functs.iterate('offset', 1)
-            offset, scanner_on = settings['offset'], settings['scanner_on']
+        if market.get("conditionId") in flagged:
+            settings = json_functs.iterate("offset", 1)
+            offset, scanner_on = settings["offset"], settings["scanner_on"]
             return
 
-        condition_id = market['conditionId']
-        question = market['question']
+        condition_id = market["conditionId"]
+        question = market["question"]
         print(f"Question: {question}")
 
         # unpack market data
@@ -171,15 +193,15 @@ async def scan_loop(seconds = 3):
         # send to unfiltered channel and google sheets regardless of flag
         await SCANNER_ALL.send(msg)
 
-        if condition_id not in json_functs.read('markets', file_path='storage/in_sheets.json'):
+        if condition_id not in json_functs.read("markets", file_path="storage/in_sheets.json"):
             await helper_functs.insert_row_at_top(sheets_data)
-            json_functs.append_flagged_markets(condition_id, file_path='storage/in_sheets.json')
+            json_functs.append_flagged_markets(condition_id, file_path="storage/in_sheets.json")
         elif flag_market:
             await helper_functs.insert_row_at_top(sheets_data)
-        
+
         # Update the offset for the next market and check if scanning should continue
-        settings = json_functs.iterate('offset', 1)
-        offset, scanner_on = settings['offset'], settings['scanner_on']
+        settings = json_functs.iterate("offset", 1)
+        offset, scanner_on = settings["offset"], settings["scanner_on"]
 
     except asyncio.CancelledError:
         await SCANNER_ALL.send("**Market scan stopped.**")
@@ -187,28 +209,51 @@ async def scan_loop(seconds = 3):
         await SCANNER_ALL.send(f"**Error during scan: {e}**")
         raise
 
-# ——— Position Rundown Logic ———
-@tasks.loop(minutes = 15)
-async def position_rundown():
-    now = datetime.now(pytz.timezone("US/Pacific")).hour
-    rundown_time = json_functs.read('rundown_time')
-    rundown_flag = json_functs.read('rundown_flag')
 
-    if now == rundown_time and not rundown_flag:
-        data = await search.get_position(user = USER, condition_id = None)
-        condition_ids = [item['conditionId'] for item in data if 'conditionId' in item]
-        MESSAGE = "***-------- Daily Rundown -------***\n"
+# ——— Position Rundown Logic ———
+@tasks.loop(minutes=15)
+async def position_rundown():
+    """
+    Generates and sends a daily rundown message of user positions at a specified hour.
+    This asynchronous function checks the current time against a predefined rundown hour (`RUNDOWN_TIME`).
+    If the rundown has not yet been sent for the day (`RUNDOWN_FLAG` is False), it retrieves the user's positions,
+    formats a summary message including the date, time, and total positions, and sends it to the designated channel (`DAILY_RUNDOWN`).
+    For each position, it fetches and organizes market data to append to the message.
+    After sending, it sets the rundown flag to prevent duplicate sends within the same hour.
+    Resets the flag when the hour changes.
+    Globals:
+        RUNDOWN_FLAG (bool): Tracks if the rundown has been sent for the current hour.
+        RUNDOWN_TIME (int): The hour (in 24-hour format) to send the rundown.
+        USER: The user identifier for position lookup.
+        DAILY_RUNDOWN: The channel or object to send the rundown message.
+    Returns:
+        None
+    """
+    global RUNDOWN_FLAG
+    now = datetime.now(pytz.timezone("US/Pacific"))
+
+    if now.hour == RUNDOWN_TIME and not RUNDOWN_FLAG:
+        data = await search.get_position(user=USER, condition_id=None)
+        condition_ids = [item["conditionId"] for item in data if "conditionId" in item]
+        MESSAGE = (
+            "**-------- Daily Rundown -------**\n"
+            f"Date: {now.date()}\n"
+            f"Time: {now.strftime("%I:%M %p")}\n"
+            f"Total Positions: {len(condition_ids)}\n"
+            "**--------------------------------**\n"
+        )
         for conditionId in condition_ids:
-            market = await search.get_market(min_volume = None, offset = None, condition_ids=conditionId)
+            market = await search.get_market(min_volume=None, offset=None, condition_ids=conditionId)
             market = market[0] if isinstance(market, list) else market
-            sheets_data, msg, results = await search.organize_market_data(conditionId, market)
-            MESSAGE += msg + "**-------------------------------**\n"
+            _, msg, _ = await search.organize_market_data(conditionId, market)
+            MESSAGE += msg + "**--------------------------------**\n"
         await DAILY_RUNDOWN.send(MESSAGE)
-    elif now != rundown_time and rundown_flag:
-        rundown_flag = json_functs.update('rundown_flag', False)
+        RUNDOWN_FLAG = True
+    elif now.hour != RUNDOWN_TIME and RUNDOWN_FLAG:
+        RUNDOWN_FLAG = False
 
 
 # ——— Run Bot ———
-if __name__ == '__main__':
-    token = json_functs.read('Bot_Token')
+if __name__ == "__main__":
+    token = json_functs.read("Bot_Token")
     bot.run(token)

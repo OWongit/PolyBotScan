@@ -15,7 +15,7 @@ PolyBotScan is a tool designed to analyze the 40 largest holders of a specified 
 
 ## Displays
 
-![Message sent by bot displaying market user data](images/PolyScan_SS.png)
+![Message sent by bot displaying market user data](images/Scanner_Unfiltered.GIF)
 
 ![Google Sheet containing market data](images/GoogleSheetSS.png)
 

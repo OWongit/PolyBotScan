@@ -1,7 +1,6 @@
 {
     "user": "PROXYWALLET_HERE_AS_STRING",
     "rundown_time": 9,
-    "rundown_flag": false,
     "offset": 0,
     "scanner_on": false,
     "min_volume": 2000000,
