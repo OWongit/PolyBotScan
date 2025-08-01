@@ -22,6 +22,7 @@ USER = None
 RUNDOWN_TIME = None
 RUNDOWN_FLAG = False
 
+
 # ——— Start Up Event ———
 @bot.event
 async def on_ready():
@@ -66,9 +67,10 @@ async def on_ready():
     if not position_rundown.is_running():
         position_rundown.start()
 
+
 # ——— Change Settings Command ———
 @bot.command()
-async def set(key=None, value=None):
+async def set(ctx, key=None, value=None):
     """
     Sets a configuration setting to a specified value.
 
@@ -107,7 +109,7 @@ async def set(key=None, value=None):
 
 # ——— Scan Command ———
 @bot.command()
-async def scan():
+async def scan(ctx):
     """
     Starts the market scanning process, continuously checking markets and posting results.
     If the scanner is already running, it will notify the user.
@@ -130,7 +132,7 @@ async def scan():
 
 # ——— Stop Scan Command ———
 @bot.command()
-async def stop_scan():
+async def stop_scan(ctx):
     """Stop the market scanning."""
     if SCANNER_ALL is None:
         await SCANNER_ALL.send("**Scanner channel not ready yet. Please try again in a few seconds.**")
@@ -236,17 +238,18 @@ async def position_rundown():
         data = await search.get_position(user=USER, condition_id=None)
         condition_ids = [item["conditionId"] for item in data if "conditionId" in item]
         MESSAGE = (
-            "**-------- Daily Rundown -------**\n"
-            f"Date: {now.date()}\n"
-            f"Time: {now.strftime("%I:%M %p")}\n"
-            f"Total Positions: {len(condition_ids)}\n"
-            "**--------------------------------**\n"
+            "# ------- Daily Rundown ------\n"
+            f"**Date: {now.date()}**\n"
+            f"**Total Positions: {len(condition_ids)}**\n"
+            "**---------------------------------------------**\n"
         )
-        for conditionId in condition_ids:
-            market = await search.get_market(min_volume=None, offset=None, condition_ids=conditionId)
+        for i in range(len(condition_ids)):
+            market = await search.get_market(min_volume=None, offset=None, condition_ids=condition_ids[i])
             market = market[0] if isinstance(market, list) else market
-            _, msg, _ = await search.organize_market_data(conditionId, market)
-            MESSAGE += msg + "**--------------------------------**\n"
+            _, msg, _ = await search.organize_market_data(condition_ids[i], market)
+            MESSAGE += msg
+            if i != len(condition_ids) - 1:
+                MESSAGE += "**---------------------------------------------**\n"
         await DAILY_RUNDOWN.send(MESSAGE)
         RUNDOWN_FLAG = True
     elif now.hour != RUNDOWN_TIME and RUNDOWN_FLAG:

@@ -9,6 +9,7 @@ __pycache__/
 #My settings and tokens
 my_config.json
 my_sheets_key.json
+in_sheets.json
 
 # Distribution / packaging
 .Python

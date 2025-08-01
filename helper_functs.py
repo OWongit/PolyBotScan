@@ -17,7 +17,7 @@ async def insert_row_at_top(insert):
     """
     # 1) Define the scopes
     SCOPES = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-    creds = ServiceAccountCredentials.from_json_keyfile_name("storage/my_sheets_key.json", SCOPES)
+    creds = ServiceAccountCredentials.from_json_keyfile_name("storage/sheets_key.json", SCOPES)
     client = gspread.authorize(creds)
 
     # 3) Open your spreadsheet by URL

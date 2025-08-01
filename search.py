@@ -187,13 +187,13 @@ async def organize_market_data(condition_id, market):
     # build message
     msg = (
         f"**{results['question']}**\n"
+        f"<https://polymarket.com/event/{results['ticker']}>\n"
         f"```Volume: ${round(results['volume'])}{((10 - len(str(results['volume']))) * ' ')}   YES:      NO:\n"
         f"• Share Price:        ${results['prices'][0]}{((9 - len(str(results['prices'][0]))) * ' ')}${results['prices'][1]}\n"
         f"• Scaled Growth:      {results['Scaled Growth Avg']['yes']}{((10 - len(str(results['Scaled Growth Avg']['yes']))) * ' ')}{results['Scaled Growth Avg']['no']}\n"
         f"• Scaled PNL:         {results['Scaled PNL Avg']['yes']}{((10 - len(str(results['Scaled PNL Avg']['yes']))) * ' ')}{results['Scaled PNL Avg']['no']}\n"
         f"• Prop of Account:    {results['Avg Prop of Account']['yes']}{((10 - len(str(results['Avg Prop of Account']['yes']))) * ' ')}{results['Avg Prop of Account']['no']}\n"
         f"• Number of Bots:     {results['Number of Bots']['yes']}{((10 - len(str(results['Number of Bots']['yes']))) * ' ')}{results['Number of Bots']['no']}```"
-        f"<https://polymarket.com/event/{results['ticker']}>\n"
     )
     return sheets_data, msg, results
 

@@ -1,7 +1,7 @@
 import json
 
 
-def read(key=None, file_path="storage/my_config.json"):
+def read(key=None, file_path="storage/config.json"):
     """
     Reads data from a JSON file and optionally retrieves the value for a specified key.
 
@@ -21,7 +21,7 @@ def read(key=None, file_path="storage/my_config.json"):
         return data.get(key) if key else data
 
 
-def update(key, value, file_path="storage/my_config.json"):
+def update(key, value, file_path="storage/config.json"):
     """
     Updates the value associated with a given key in a JSON file.
 
@@ -46,7 +46,7 @@ def update(key, value, file_path="storage/my_config.json"):
     return data
 
 
-def iterate(key, iteration, file_path="storage/my_config.json"):
+def iterate(key, iteration, file_path="storage/config.json"):
     """
     Increments the value of a specified key in the JSON file by a given iteration amount.
 
