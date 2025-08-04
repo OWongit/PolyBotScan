@@ -168,6 +168,7 @@ async def organize_market_data(condition_id, market):
         results["question"],
         f"https://polymarket.com/event/{results['ticker']}",
         results["volume"],
+        condition_id,
         results["resolves"][0:10],
         results["prices"][0],
         results["prices"][1],

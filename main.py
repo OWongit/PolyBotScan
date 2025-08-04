@@ -21,6 +21,7 @@ DAILY_RUNDOWN = None
 USER = None
 RUNDOWN_TIME = None
 RUNDOWN_FLAG = False
+SCAN_DOWN_TIME = 0  # Hour (0–23) to pause scanning for Google Apps Script maintenance; None to disable
 
 
 # ——— Start Up Event ———
@@ -152,64 +153,61 @@ async def stop_scan(ctx):
 
 
 # ——— Market Scan Logic ———
-@tasks.loop()
+@tasks.loop(seconds=5)
 async def scan_loop():
     """Continuously scan markets and post results."""
+    if await helper_functs.is_allowed_time(SCAN_DOWN_TIME):
+        try:
+            # Load the settings from the JSON file
+            settings = json_functs.read()
 
-    try:
-        # Load the settings from the JSON file
-        settings = json_functs.read()
+            # get market data and flagged markets
+            market = await search.get_market(settings["min_volume"], settings["offset"])
+            flagged = json_functs.read("markets", file_path="storage/flagged_markets.json")
 
-        # get market data and flagged markets
-        market = await search.get_market(settings["min_volume"], settings["offset"])
-        flagged = json_functs.read("markets", file_path="storage/flagged_markets.json")
+            # Check if the market is None or if its conditionId is in flagged markets (means every market has been scanned)
+            if market is None:
+                settings = json_functs.iterate("offset", -settings["offset"])
+                return
 
-        # Check if the market is None or if its conditionId is in flagged markets (means every market has been scanned)
-        if market is None:
-            settings = json_functs.iterate("offset", -settings["offset"])
-            offset, scanner_on = settings["offset"], settings["scanner_on"]
-            return
+            # If the market's conditionId is in flagged markets, skip it
+            if market.get("conditionId") in flagged:
+                settings = json_functs.iterate("offset", 1)
+                return
 
-        # If the market's conditionId is in flagged markets, skip it
-        if market.get("conditionId") in flagged:
+            condition_id = market["conditionId"]
+            question = market["question"]
+            print(f"Question: {question}")
+
+            # unpack market data
+            sheets_data, msg, results = await search.organize_market_data(condition_id, market)
+
+            # Send the message to the flagged-buys channel if the market meets the criteria
+            flag_market = await search.flag_market(results, settings)
+            if flag_market:
+                json_functs.append_flagged_markets(condition_id)
+                await SCANNER_FLAGGED.send(f"** Buy {flag_market}**\n" + "----------------\n" + msg)
+                sheets_data.insert(0, f"BUY {flag_market}")
+            else:
+                sheets_data.insert(0, "NO FLAG")
+
+            # send to unfiltered channel and google sheets regardless of flag
+            await SCANNER_ALL.send(msg)
+
+            if condition_id not in json_functs.read("markets", file_path="storage/in_sheets.json"):
+                await helper_functs.insert_row_at_top(sheets_data)
+                json_functs.append_flagged_markets(condition_id, file_path="storage/in_sheets.json")
+            elif flag_market:
+                await helper_functs.insert_row_at_top(sheets_data)
+
+            # Update the offset for the next market and check if scanning should continue
             settings = json_functs.iterate("offset", 1)
-            offset, scanner_on = settings["offset"], settings["scanner_on"]
-            return
 
-        condition_id = market["conditionId"]
-        question = market["question"]
-        print(f"Question: {question}")
-
-        # unpack market data
-        sheets_data, msg, results = await search.organize_market_data(condition_id, market)
-
-        # Send the message to the flagged-buys channel if the market meets the criteria
-        flag_market = await search.flag_market(results, settings)
-        if flag_market:
-            json_functs.append_flagged_markets(condition_id)
-            await SCANNER_FLAGGED.send(f"** Buy {flag_market}**\n" + "----------------\n" + msg)
-            sheets_data.insert(0, f"BUY {flag_market}")
-        else:
-            sheets_data.insert(0, "NO FLAG")
-
-        # send to unfiltered channel and google sheets regardless of flag
-        await SCANNER_ALL.send(msg)
-
-        if condition_id not in json_functs.read("markets", file_path="storage/in_sheets.json"):
-            await helper_functs.insert_row_at_top(sheets_data)
-            json_functs.append_flagged_markets(condition_id, file_path="storage/in_sheets.json")
-        elif flag_market:
-            await helper_functs.insert_row_at_top(sheets_data)
-
-        # Update the offset for the next market and check if scanning should continue
-        settings = json_functs.iterate("offset", 1)
-        offset, scanner_on = settings["offset"], settings["scanner_on"]
-
-    except asyncio.CancelledError:
-        await SCANNER_ALL.send("**Market scan stopped.**")
-    except Exception as e:
-        await SCANNER_ALL.send(f"**Error during scan: {e}**")
-        raise
+        except asyncio.CancelledError:
+            await SCANNER_ALL.send("**Market scan stopped.**")
+        except Exception as e:
+            await SCANNER_ALL.send(f"**Error during scan: {e}**")
+            raise
 
 
 # ——— Position Rundown Logic ———
@@ -237,19 +235,12 @@ async def position_rundown():
     if now.hour == RUNDOWN_TIME and not RUNDOWN_FLAG:
         data = await search.get_position(user=USER, condition_id=None)
         condition_ids = [item["conditionId"] for item in data if "conditionId" in item]
-        MESSAGE = (
-            "# ------- Daily Rundown ------\n"
-            f"**Date: {now.date()}**\n"
-            f"**Total Positions: {len(condition_ids)}**\n"
-            "**---------------------------------------------**\n"
-        )
-        for i in range(len(condition_ids)):
-            market = await search.get_market(min_volume=None, offset=None, condition_ids=condition_ids[i])
+        MESSAGE = "# ------- Daily Rundown ------\n" f"**Date: {now.date()}**\n" f"**Total Positions: {len(condition_ids)}**\n"
+        for condition_id in condition_ids:
+            market = await search.get_market(min_volume=None, offset=None, condition_ids=condition_id)
             market = market[0] if isinstance(market, list) else market
-            _, msg, _ = await search.organize_market_data(condition_ids[i], market)
-            MESSAGE += msg
-            if i != len(condition_ids) - 1:
-                MESSAGE += "**---------------------------------------------**\n"
+            _, msg, _ = await search.organize_market_data(condition_id, market)
+            MESSAGE += "**---------------------------------------------**\n" + msg
         await DAILY_RUNDOWN.send(MESSAGE)
         RUNDOWN_FLAG = True
     elif now.hour != RUNDOWN_TIME and RUNDOWN_FLAG:

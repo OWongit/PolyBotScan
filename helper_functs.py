@@ -1,4 +1,5 @@
 import gspread
+from datetime import datetime, time, timedelta
 from oauth2client.service_account import ServiceAccountCredentials
 
 
@@ -59,3 +60,32 @@ async def avg_prop(sizes, accounts):
     if sum(accounts) == 0:
         return 0
     return sum(s / a for s, a in zip(sizes, accounts) if a != 0) / len(sizes)
+
+
+async def is_allowed_time(anchor_hour=None) -> bool:
+    """
+    Async-compatible check: returns True if the current time
+    is outside the exclusion window from (anchor_hour:00 − 10min)
+    through (anchor_hour:00 + 70min). Returns True if anchor_hour is None.
+    """
+    if anchor_hour is None:
+        return True
+
+    now = datetime.now()
+    t = now.time()
+
+    # normalize into 0–23
+    anchor = anchor_hour % 24
+    anchor_time = time(anchor, 0)
+
+    today_anchor = datetime.combine(now.date(), anchor_time)
+    start_exclude = (today_anchor - timedelta(minutes=10)).time()
+    end_exclude = (today_anchor + timedelta(minutes=70)).time()
+
+    if start_exclude <= end_exclude:
+        in_window = start_exclude <= t <= end_exclude
+    else:
+        # wraps past midnight
+        in_window = t >= start_exclude or t <= end_exclude
+
+    return not in_window
